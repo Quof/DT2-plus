@@ -1,0 +1,101 @@
+Distorted Travesty 2 - 60/120 FPS + gamepad conversion notes
+==============================================================
+
+The game logic still runs in 30fps "ticks"; the frame rate (30, 60 or 120) only changes how many frames a tick is
+drawn over. Everything that changed is marked in the code with "60fps change", "gamepad change" or "frame rate change"
+comments, with the original line kept commented out above it. At 30fps the converted code does exactly what the
+original did.
+
+Playing
+-------
+- Frame rate: [F2] on the title screen cycles 30 -> 60 -> 120 (the controls help there shows the new rate for a
+  moment). It can only be changed on the title screen: pause menu > Options shows it greyed out, with a note. It's
+  saved in DT2Options.dts (next to the save file), with the gamepad settings. vsync is off (needed for 120).
+- Window: 2x (1024x768) by default; [F3] still switches between 1x and 2x, and the choice is remembered.
+- D-Pad Dash (Up/Down + Jump dashes) is off by default for new games (pause menu > Options turns it on).
+- Starting, retrying or leaving a level from a menu (world map, title, Game Over, pause menu, bonus challenges) doesn't
+  carry the confirm press into the game: held keys and pad buttons count as let go until they're pressed again.
+- Gamepad: any SDL-supported pad (Xbox / XInput, PlayStation, Switch Pro, ...). Pause menu > Options > Gamepad Input
+  turns it on/off. Default buttons:
+    D-pad / left stick  move, look up, duck, menus
+    A (Cross)           Jump, menu Confirm          B (Circle)    Use Water, menu Cancel
+    X (Square)          Use Fire                    Y (Triangle)  Use Earth, the menus' [L] key
+    L1                  Use Wind                    R2 / R1       Dash Left / Dash Right (back / forward dash
+                                                                  while "Right is Forward" is on, the default)
+    START               Pause ([P])                 BACK          Skip cutscene ([M])
+  The game's buttons can be changed in pause menu > Set Controls: [L] (or Y) swaps between the Keyboard and Gamepad
+  lists; Confirm on a row, then press the new button ([K] cancels). Restore Default puts the defaults back. Buttons
+  you set yourself are kept in DT2Options.dts; until then the defaults above are used (so changed defaults apply).
+- On-screen input prompts follow the input being used: while the gamepad is (any of its actions held, until a key is
+  pressed) they show its buttons as DT3+'s icons (sKeyPressPad, Xbox or PlayStation by the pad), otherwise the keys.
+  That's the tutorial panels' [ ] boxes (in the tutorial and pause menu > How to Play), the title screen's controls
+  and Extras Room prompt, the intro's skip prompt, the scan window's Chao / Jeremy info keys, the ending's Extras Room
+  note, and the pause menu's gamepad hints. Texts name inputs with [tokens] ([Jump], [Confirm], [Skip]...: scrInputCode),
+  drawn by scrDrawInput / textDropShadow; [F2], [Esc] and other keys with no gamepad button stay as they are.
+- The Game Maker 8.2 Core and Joystick extensions are now used (settings/extensions.txt), as in DT1 Plus and DT3+.
+
+How the conversion works (for further edits)
+---------------------------------------------
+- gDeltaTime = 30 / fps (1, 0.5 or 0.25). Anything changed every frame by a 30fps amount is scaled by it
+  (x+=4 -> x+=4*gDeltaTime, timer+=1 -> timer+=1*gDeltaTime). One-off changes (a jump's impulse, a reset) are not.
+- gDeltaDoTicks is 1 on the frame that ends a 30fps tick: used for once-per-tick things (spawning trail effects,
+  flickers, music volume steps, moving solids' logic). oFrameControl works it out every Begin Step; ticks restart with
+  each room, and a frame-rate change waits for the end of a tick.
+- Counters that count ticks by gDeltaTime still land on whole numbers, so "=N" checks keep working. Something done
+  every tick from tick N on starts right after tick N-1 (>=N becomes >N-1); counts that end a scene or an attack use
+  >= (the same as = at 30fps).
+- GameMaker's built-in speed/direction run in full every frame, so moving objects use _speed/_direction and
+  correctSpeedDirection(self) instead (shooter level: in the bases' End Step). Spawners set ._direction.
+- Gravity / acceleration spread over the frames: scrGravAcc (and scrTickAcc for capped / conditional changes).
+  Some projectiles run their whole 30fps step on their own ticks (oGTrackShot1, oHarpuiaTop, oVirusChaser, ...).
+- The player's movement above 30fps is pMoveToWrapNew (from DT3+); pMoveToWrapOrig is the original, used at 30fps.
+  Slopes: the climb (up to maxSlope+1 pixels) and the move downhill (up to maxDownSlope pixels) are amounts per 30fps
+  tick, so above 30fps they're shared out over each tick's frames (pMoveToWrapNew's slopeUpRoom, characterStepEvent's
+  downSnap1-3). Done in full every frame, dash-speed runs were pulled down steep slopes they fly off at 30fps, climbed
+  faster than at 30fps, and small steps (3-5 pixels) stopped the player.
+- Parts that take a value from a neighbour that's updated after them (so they get its value from the last step: the
+  Wall Shifting Golem's legs, oTWSG_Leg, and the Horror Virus's neck, oVH_Extend) keep that value for a 30fps tick, so
+  a change still travels along them at one part per tick. Whatever steers such a chain from its own position has to
+  do it once per tick too (the Horror Virus's face aims at the player once per tick): steering every frame against the
+  tick's lag overshoots, and the face flew back and forth across the screen.
+- Enemies and pickups that climb out of a solid they're in ("if isCollisionSolid() y-=2", 2px a tick: goombas,
+  paratroopas, jumpers, ruin monkeys, health pickups) use scrSolidPushOut above 30fps: whole pixels, at most 2 a tick, at
+  the start of their step. y-=2*gDeltaTime a frame left them on half pixels part-way into a rising elevator (3-3), where
+  their wall checks saw it and they stood stuck.
+- Numbers shown on screen stay whole: the Blast Off recovery shows whole ticks (oHUD), and life regained over time is
+  added once per tick (so the scan window doesn't show decimals).
+- Room transitions: room_goto_fixed scales transition_steps.
+- oGame.time counts frames: "oGame.time mod N" checks are "oGame.time mod (N/gDeltaTime)".
+- Gamepad: scrPadHeld / scrPadPressed / scrPadReleased(action) are OR'd next to the keyboard checks; scrGamepadSync
+  is called next to every io_clear(). Actions and codes are listed in scrGamepadInit.
+
+Instance ids (marked "instance id fix")
+---------------------------------------
+The original code refers to some instances placed in rooms by their ids, e.g. (341805).y for the platform in 3-3's
+climb, with (356639) {instance_destroy()} for Air Trial's starting platform, and the followers / switch barriers' idFollow
+and switchID in creation code. This project's rooms give those instances new ids, so the numbers found nothing (an
+"Unknown variable" error, or the platform staying). As in DT3+, each such instance registers itself under its original
+id from its creation code, GID_SET(id in the original game, id), and the code uses GID(id in the original game); the map
+is made in rIntro's creation code. Which instance had which id comes from the decompiled .gm81 next to the original exe
+(gmksplit --preserve-ids, as in gm81_to_folder.bat): all 27 ids the code uses were found, each in the room using it.
+A follower made before the instance it follows (the spikes on rBonusC3's Tetris blocks) keeps the id in idFollowGID and
+the room's creation code sets idFollow once everything is made.
+
+Known limitations
+-----------------
+- Game Maker's built-in effects (effect_create_above: rings, fireworks, sparks, smoke) animate per frame, so they
+  play 2x/4x as fast at 60/120fps (as in DT3+).
+- Not compiled or play-tested here: please build in Game Maker 8.2 and play through, especially bosses and the
+  shooter level, at each frame rate.
+
+Original-game bugs that were found and kept as they are
+-------------------------------------------------------
+- oRuinMonkey calls makeEnemyActive(0) with an argument the script doesn't read.
+- oSmallJumper / oLargeJumper use PART_JUMP_SLASH_1 / TECH_GRAND_SLAM, which aren't defined; the conveyors refer to
+  oEarthShift and oIronMaiden to oRedDustSnake / oMoneyPickup, which don't exist in DT2.
+- The oShroud family of objects is never used.
+- oEvW5's death wall: pdwDist=point_distance(...)<256 is a true/false, so the wall always uses its slowest speed.
+- oGChainCon's "if maxSwing=0" rarely lands (0.2 steps), so the chain keeps a tiny swing.
+- oBossBigCore sets bottomLaser.y twice (the first should be .x).
+- oWaterBloom's "seedBurstTime mod seedBurstSpd*2=0" is "(mod seedBurstSpd)*2".
+- oClaireShip's kill combo only resets when comboTime is exactly 60.

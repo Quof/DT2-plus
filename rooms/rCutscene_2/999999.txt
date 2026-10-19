@@ -1,0 +1,11 @@
+tileIntermediaryCaves,400,80,96,64,32,64,0,1,1,4294967295
+tileIntermediaryCaves,400,144,96,96,32,32,0,1,1,4294967295
+tileIntermediaryCaves,400,176,96,96,32,32,0,1,1,4294967295
+tileIntermediaryCaves,400,208,96,96,32,32,0,1,1,4294967295
+tileIntermediaryCaves,400,240,96,96,32,32,0,1,1,4294967295
+tileIntermediaryCaves,400,272,96,96,32,32,0,1,1,4294967295
+tileIntermediaryCaves,400,304,96,96,32,16,0,1,1,4294967295
+tileIntermediaryCaves,480,288,0,0,32,32,0,1,1,4294967295
+tileIntermediaryWoods,389,323,32,48,16,64,0,1,1,4294967295
+tileIntermediaryWoods,397,319,32,48,16,64,0,1,1,4294967295
+tileIntermediaryWoods,395,328,32,48,16,64,0,1,1,4294967295

@@ -1,0 +1,1 @@
+flameDir=0

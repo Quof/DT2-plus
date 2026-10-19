@@ -1,0 +1,243 @@
+/*
+60fps change (added): the player's acceleration, friction and movement above 30fps (characterStepEvent calls
+pMoveToWrapOrig, the original code, at 30fps). Taken from DT3+ (same platform engine), where it was tuned so movement
+matches 30fps: acceleration is spread over the frame (half before the move, half after), friction is applied as a power
+of the frame's share of a tick, and the move goes through pMoveTo (golden ratio pixel dithering on ditherCounter).
+Velocities set directly this frame (xVelSetTick/yVelSetTick, or xVelSetExt/yVelSetExt from other objects) use the 30fps
+formula instead.
+*/
+
+  //Limits the acceleration if it is too extreme
+  if xAcc>xAccLimit {xAcc=xAccLimit}
+  else if xAcc<-1*xAccLimit {xAcc=-1*xAccLimit}
+  if yAcc>yAccLimit {yAcc=yAccLimit}
+  else if yAcc<-1*yAccLimit {yAcc=-1*yAccLimit}
+
+  //60fps change (added): the external forces (extForceX/Y: wind, a guard's knockback...), which characterStepEvent leaves
+  //here as extAccX/Y, count as acceleration, so friction treats them as at 30fps. Added after the cap above, as at 30fps
+  //they went straight onto the velocity, uncapped
+  var tExtX;
+  tExtX=extAccX
+  xAcc+=extAccX
+  yAcc+=extAccY
+  extAccX=0
+  extAccY=0
+
+  //remember whether anything is accelerating each axis this frame (see the approximatelyZero checks below)
+  var tXAccIn, tYAccIn;
+  tXAccIn = xAcc
+  tYAccIn = yAcc
+
+  //applies the acceleration
+  var xAccapply, yAccapply;
+  var xFricapply, yFricapply;
+  xFricapply = xFric
+  yFricapply = yFric
+  if (xFric > 0.0 and xFric < 1.0)
+  {
+      xFricapply = exp(ln(xFric + 0.000001)*gDeltaTime)
+      xAccapply = xAcc * xFric * (xFricapply - 1.0) / (xFric - 1.0 - 0.000001)
+  }
+  else if (xFric == 1.0)
+      xAccapply = xAcc * gDeltaTime
+  if (yFric > 0.0 and yFric < 1.0)
+  {
+      yFricapply = exp(ln(yFric + 0.000001)*gDeltaTime)
+      yAccapply = yAcc * yFric * (yFricapply - 1.0) / (yFric - 1.0 - 0.000001)
+  }
+  else if (yFric == 1.0)
+      yAccapply = yAcc * gDeltaTime
+
+  xAccapply-=xVel * (1.0 - xFricapply)
+  yAccapply-=yVel * (1.0 - yFricapply)
+
+  //dash code set this axis' velocity directly this frame (xVelSetTick/yVelSetTick, see characterStepEvent):
+  //use the original 30fps formula, (velocity + acceleration) * friction, and don't integrate further this frame.
+  //Otherwise the acceleration added on top of a velocity that is overwritten every frame mostly gets lost
+  //(e.g. Claire's air dash momentum on Gate F's ice fell ~50-70px short of 30fps)
+  //The same applies to one-off pushes put into xAcc/yAcc (they'd otherwise only count for one frame's fraction of a tick),
+  //and to velocities set by other objects (xVelSetExt/yVelSetExt: fans, wind, bomb blasts).
+  //if xVelSetTick or xVelSetExt {xVel=(xVel+xAcc)*xFric; xAccapply=0}
+  //if yVelSetTick or yVelSetExt {yVel=(yVel+yAcc)*yFric; yAccapply=0}
+  //60fps change: a velocity set just once (crouch slide, walking off a ledge, getting hit, wall jumps, the release nudge...)
+  //is also kept unchanged until half a 30fps tick has passed. At 60fps that's only this frame, and starting the integration
+  //half a tick in lines it up with the 30fps ticks; at 120fps this frame is a quarter tick, so without the hold the crouch
+  //slide came up 2-4px short and falls off ledges ran ~2px ahead. A velocity set again on the next frame (dashes, fans,
+  //knockback) is set every frame anyway, so that cancels the hold.
+  if xVelSetTick or xVelSetExt
+  {
+    xVel=(xVel+xAcc)*xFric; xAccapply=0
+    if xVelSetPrev=0 {xVelHold=0.5-gDeltaTime} else {xVelHold=0}
+    xVelSetPrev=1
+  }
+  else
+  {
+    xVelSetPrev=0
+    if xVelHold>0.0001 {xAccapply=0; xVelHold-=gDeltaTime}
+  }
+  if yVelSetTick or yVelSetExt
+  {
+    yVel=(yVel+yAcc)*yFric; yAccapply=0
+    if yVelSetPrev=0 {yVelHold=0.5-gDeltaTime} else {yVelHold=0}
+    yVelSetPrev=1
+  }
+  else
+  {
+    yVelSetPrev=0
+    if yVelHold>0.0001 {yAccapply=0; yVelHold-=gDeltaTime}
+  }
+  xVelSetExt=0
+  yVelSetExt=0
+
+  xAccapply *= 0.5
+  yAccapply *= 0.5
+
+  xVel+=xAccapply
+  //xVel+=xAccapply // !
+  yVel+=yAccapply
+
+  // friction bodge so that microadjusting is easier
+  //if xAccInputWalk == 0.0 && xFric > 0.2 && xFric < 0.8 && abs(xVel) < 3.0
+  if xAccInputWalk == 0.0 && tExtX == 0 && xFric > 0.2 && xFric < 0.8 && abs(xVel) < 3.0 //60fps change: not while an external force pushes (it held back the wind's push on a player standing in it)
+  {
+      var xVelSign;
+      xVelSign = sign(xVel)
+      xVel -= xVelSign * 2.0 * gDeltaTime * (1.0 - xFric)
+      if sign(xVel) != xVelSign
+        xVel = 0.0
+  }
+
+
+  xAcc=0
+  yAcc=0
+
+  //apply the limits since the velocity may be too extreme
+  if xVel>xVelLimit {xVel=xVelLimit}
+  else if xVel<-1*xVelLimit {xVel=-1*xVelLimit}
+  if yVel>yVelLimit {yVel=yVelLimit}
+  else if yVel<-16 {yVel=-16}
+  //approximates the "active" variables.
+  //Only snap a tiny velocity to 0 when nothing is accelerating that axis: above 30fps each frame only adds a fraction
+  //of a tick's acceleration, so a low acceleration (e.g. Gate F's ice runAcc, or low gravity at the top of a jump)
+  //would otherwise be snapped back to 0 every frame and never build up (stuck at 120fps).
+  if approximatelyZero(xVel) and tXAccIn == 0 {xVel=0}
+  if approximatelyZero(yVel) and tYAccIn == 0 {yVel=0}
+  if approximatelyZero(xAcc) {xAcc=0}
+  if approximatelyZero(yAcc) {yAcc=0}
+
+  effectiveMaxSlope = floor(maxSlope*gDeltaTime+frac(ditherCounter * 0.618))
+
+  // !!!!EVIL HACK!!!!
+  // maxSlope doesn't function as a slope speed penalty at high framerates
+  // so we need to manually bodge it
+  //var speedmod;
+  speedmod = 1.0
+  if platformCharacterIs(ON_GROUND) && abs(xVel)>0
+  {
+    //var __xtemp, __ytemp, __ystart, __yend;
+    __xtemp=x;
+    __ytemp=y;
+    __ystart = __ytemp-3
+    __yend = __ytemp+3
+    //var d_center, d_left, d_right, d_slope;
+    d_slope = 0
+    x = __xtemp-2
+    y = __ytemp-3
+    for (y = __ystart; y <= __yend; y += 1)
+        if pCheckLandBelow() break;
+    d_left = y - __ystart
+    x = __xtemp
+    y = __ytemp-3
+    for (y = __ystart; y <= __yend; y += 1)
+        if pCheckLandBelow() break;
+    d_center = y - __ystart
+    x = __xtemp+2
+    y = __ytemp-3
+    for (y = __ystart; y <= __yend; y += 1)
+        if pCheckLandBelow() break;
+    d_right = y - __ystart
+    if d_left != 0 && d_left != 6 && d_right != 0 && d_right != 6
+        { d_slope = (d_right-d_left)/4 }
+    else if d_center != 0 && d_center != 6 && d_right != 0 && d_right != 6
+        { d_slope = (d_right-d_center)/2 }
+    else if d_left != 0 && d_left != 6 && d_center != 0 && d_center != 6
+        { d_slope = (d_center-d_left)/2 }
+    
+    if sign(d_slope) != sign(xVel)
+        speedmod = 1.0/(1.0+max(0.0, abs(d_slope)*0.8-0.4))
+    
+    x = __xtemp
+    y = __ytemp
+  }
+  
+  //60fps change (added): how high the player may climb this frame. At 30fps a move climbs up to maxSlope+1 pixels, once
+  //per 30fps tick. Raising the player effectiveMaxSlope+1 pixels every frame (as in DT3+) let dash-speed runs climb
+  //slopes 1.2x (60fps) / 1.6x (120fps) as fast as at 30fps (45 degrees: 6 / 8 pixels per tick, 5 at 30fps; the low slopes:
+  //12 / 16 pixels across, 10 at 30fps), and steps that 30fps climbs (up to 5 pixels) stopped the player from 4 pixels at
+  //60fps and 3 at 120fps. slopeUpRoom is
+  //what's left of a tick's climb: it fills up by a tick's worth over each tick, never past one tick's worth, so a step
+  //is still climbed in one go and slopes are climbed at the 30fps rate (checked with a simulation of DT2's slopes)
+  var tRaise;
+  slopeUpRoom=min(maxSlope+1,slopeUpRoom+(maxSlope+1)*gDeltaTime)
+  tRaise=floor(slopeUpRoom+0.000001)
+
+  //prepares the character to move up a hill
+  //we need to use the "slopeYPrev" variable later to know the "true" y previous value
+  //keep this condition the same
+  if effectiveMaxSlope>0 and platformCharacterIs(ON_GROUND) and xVel!=0
+  {
+    slopeYPrev=y
+    //for(y=y;y>=slopeYPrev-effectiveMaxSlope;y-=1)
+    for(y=y;y>slopeYPrev-tRaise;y-=1) //60fps change: up to tRaise pixels (see above)
+      if isCollisionTop(1)
+        break
+    slopeChangeInY=slopeYPrev-y
+  }
+  else {slopeChangeInY=0}
+  
+  //moves the character, and balances out the effects caused by other processes
+  //keep this condition the same
+  if effectiveMaxSlope*abs(xVel)>0 and platformCharacterIs(ON_GROUND)
+  {
+    //we need to check if we should dampen out the speed as the character runs on upward slopes
+    xPrev=x
+    yPrev=slopeYPrev      //we don't want to use y, because y is too high
+    yPrevHigh=y          //we'll use the higher previous variable later
+    pMoveTo(xVel*gDeltaTime*speedmod,yVel*gDeltaTime*speedmod+slopeChangeInY)
+    dist=point_distance(xPrev,yPrev,x,y) //overall distance that has been traveled
+    //we should have only ran at xVel
+    if dist>abs(xVelInteger)
+    {
+      //show_message(string(dist)+ " "+string(abs(xVelInteger)))
+      //excess=dist-abs(xVelInteger)
+      //if xVelInteger<0 {excess*=-1}
+      //move back since the character moved too far
+      x=xPrev
+      y=yPrevHigh  //we need the character to be high so the character can move down
+      //this time we'll move the correct distance, but we need to shorten out the xVel a little
+      //these lines can be changed for different types of slowing down when running up hills
+      //ratio=abs(xVelInteger)/dist*0.9        //can be changed, init: 0.9
+      ratio=1.075
+      pMoveTo((xVel*gDeltaTime*ratio*speedmod),(yVel*gDeltaTime*ratio*speedmod+slopeChangeInY))
+    }
+    if y<slopeYPrev {slopeUpRoom-=slopeYPrev-y} //60fps change (added): the climb uses up this tick's room (see above)
+  }
+  else
+  {
+    //we simply move xVel and yVel while in the air or on a ladder
+    pMoveTo(xVel*gDeltaTime,yVel*gDeltaTime)
+  }
+
+  xVel+=xAccapply
+  yVel+=yAccapply
+
+  //apply the limits since the velocity may be too extreme
+  if xVel>xVelLimit {xVel=xVelLimit}
+  else if xVel<-1*xVelLimit {xVel=-1*xVelLimit}
+  if yVel>yVelLimit {yVel=yVelLimit}
+  else if yVel<-16 {yVel=-16}
+  //approximates the "active" variables (same rule as above: don't snap to 0 while that axis is being accelerated)
+  if approximatelyZero(xVel) and tXAccIn == 0 {xVel=0}
+  if approximatelyZero(yVel) and tYAccIn == 0 {yVel=0}
+  if approximatelyZero(xAcc) {xAcc=0}
+  if approximatelyZero(yAcc) {yAcc=0}

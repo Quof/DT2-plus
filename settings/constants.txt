@@ -1,0 +1,1 @@
+shooterFieldMidY=212

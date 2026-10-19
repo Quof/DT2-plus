@@ -1,0 +1,31 @@
+#define Create_0
+/*"/*'/**//* YYD ACTION
+lib_id=1
+action_id=603
+applies_to=self
+*/
+window=0
+messageColor=c_black
+#define Step_0
+/*"/*'/**//* YYD ACTION
+lib_id=1
+action_id=603
+applies_to=self
+*/
+if fadingTime>0
+{
+  //fadingTime-=1
+  fadingTime-=1*gDeltaTime //60fps change: counts 30fps ticks
+  if fadingTime<=20
+    //image_alpha-=0.05
+    image_alpha-=0.05*gDeltaTime //60fps change: per 30fps tick
+}
+else
+  instance_destroy()
+#define Draw_0
+/*"/*'/**//* YYD ACTION
+lib_id=1
+action_id=603
+applies_to=self
+*/
+showMessage(view_xview[0]+x,view_yview[0]+y,message,talker,messageColor,image_alpha,window)

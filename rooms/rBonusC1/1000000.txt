@@ -1,0 +1,6 @@
+tileIntermediaryWoods,240,256,48,48,16,64,0,1,1,4294967295
+tileIntermediaryWoods,256,256,128,48,16,64,0,1,1,4294967295
+tileIntermediaryWoods,240,320,48,80,16,32,0,1,1,4294967295
+tileIntermediaryWoods,240,352,48,80,16,32,0,1,1,4294967295
+tileIntermediaryWoods,256,320,128,80,16,32,0,1,1,4294967295
+tileIntermediaryWoods,256,352,128,80,16,32,0,1,1,4294967295

@@ -1,0 +1,2 @@
+headerText="DT3 Ability Sets"
+stringToShow="Neither Jerry or Claire have their own abilities.#Instead they can equip ability sets, two of these can be active.#For example, Claire can be equipped with some of Samus' abilities,#which will give her access to Samus' Missiles, Bombs, and Morph Ball.#Only a small number of ability sets can be used by both. The Samus#abilities, for example, can only be equip by Claire."

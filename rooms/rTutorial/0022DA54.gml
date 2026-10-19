@@ -1,0 +1,3 @@
+image_angle=270
+image_xscale=1.25
+y+=8

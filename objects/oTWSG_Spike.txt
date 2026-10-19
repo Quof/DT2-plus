@@ -1,0 +1,7 @@
+sprite=sTWSG_Spike
+visible=0
+solid=0
+persistent=0
+depth=25
+parent=oEProjectileBase
+mask=

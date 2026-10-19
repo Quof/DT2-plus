@@ -1,0 +1,7 @@
+sprite=sMSCloudA
+visible=1
+solid=0
+persistent=0
+depth=1200000
+parent=
+mask=
